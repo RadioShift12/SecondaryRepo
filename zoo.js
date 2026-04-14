@@ -12,7 +12,7 @@ class Animal {
         this.#healthStatus = initialStatus;
     }
 
-    // This is something new to me, I didnt know getters and setters existed in js.
+    
     get status() {
         return this.#healthStatus;
     }
@@ -62,11 +62,9 @@ const zoo = {
     }
 };
 
-/*
- Part 2: Security Implementation
-*/
+
 const Security = {
-    // CSRF Protection
+    
     generateCSRFToken: () => {
         const array = new Uint32Array(2);
         window.crypto.getRandomValues(array);
@@ -79,7 +77,7 @@ const Security = {
         return sessionStorage.getItem('csrf_token') !== null;
     },
 
-    // XSS Prevention: Sanitizes strings
+    
     sanitize: (str) => {
         if (typeof str !== 'string') return str;
         return str.replace(/[&<>"']/g, (m) => ({
@@ -87,10 +85,10 @@ const Security = {
         })[m]);
     },
 
-    // Mock JWT/Auth System
+    
     getAdminToken: () => {
         const payload = { role: 'admin', exp: Date.now() + 3600000 };
-        const token = btoa(JSON.stringify(payload)); // Simplified mock JWT
+        const token = btoa(JSON.stringify(payload)); 
         localStorage.setItem('admin_token', token);
         return token;
     },
@@ -104,13 +102,120 @@ const Security = {
         } catch {
             return false;
         }
+    },
+
+    // PART 2 CORS & Cookies
+    allowedOrigins: ["http://localhost", "https://localhost", "http://127.0.0.1:5500", "https://zoo-9qur.onrender.com"],
+
+    validateOrigin: () => {
+        const origin = window.location.origin;
+        console.log("Current Origin:", origin);
+        return Security.allowedOrigins.includes(origin);
+    },
+
+    setSecureCookie: (name, value) => {
+        document.cookie = `${name}=${value}; Secure; SameSite=Strict; path=/`;
+    },
+
+    // PART 3 Protocols Security
+    logSecurityEvent: (type, message) => {
+        if (!window.securityLogs) window.securityLogs = [];
+
+        const log = {
+            time: new Date().toISOString(),
+            type,
+            message
+        };
+
+        window.securityLogs.push(log);
+        console.warn("[SECURITY]", log);
+    },
+
+    checkHTTPS: () => {
+        if (window.location.protocol !== "https:") {
+            Security.logSecurityEvent("INSECURE_PROTOCOL", window.location.href);
+            return false;
+        }
+        return true;
+    },
+
+    validateCertificate: () => {
+        const isSecureContext = window.isSecureContext;
+
+        if (!isSecureContext) {
+            Security.logSecurityEvent("CERT_INVALID", "Not a secure context");
+            return false;
+        }
+        return true;
+    },
+
+    fallback: () => {
+        zoo.handleError("Security requirements not met. Running in limited mode.");
     }
 };
 
+// PART 1  AJAX Setup
+const API = {
+    baseURL: "./animals.json",
+    loading: false,
+
+    async fetchAnimals() {
+        this.setLoading(true);
+
+        try {
+            const response = await fetch(this.baseURL, {
+                method: "GET",
+                credentials: "include",
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            return data;
+        } catch (error) {
+            Security.logSecurityEvent("FETCH_ERROR", error.message);
+            zoo.handleError("Failed to fetch animals.");
+            return [];
+        } finally {
+            this.setLoading(false);
+        }
+    },
+
+    setLoading(state) {
+        this.loading = state;
+
+        const loader = document.getElementById("loading");
+        if (loader) {
+            loader.textContent = state ? "Loading..." : "";
+        }
+    }
+};
+
+
 document.addEventListener('DOMContentLoaded', () => {
-    // Start Security
+    
     Security.generateCSRFToken();
-    Security.getAdminToken(); // Simulate admin login
+    Security.getAdminToken(); 
+
+
+    if (!Security.validateOrigin()) {
+        Security.logSecurityEvent("CORS_BLOCK", "Origin not allowed");
+        zoo.handleError("Unauthorized origin.");
+        return;
+    }
+    Security.setSecureCookie("session", "active");
+    const httpsValid = Security.checkHTTPS();
+    const certValid = Security.validateCertificate();
+
+    if (!httpsValid || !certValid) {
+        Security.fallback();
+    }
 
     const rawAnimals = [
         { name: "Leo", species: "Lion", id: 2, status: "closed", health: "Excellent" },
@@ -120,7 +225,14 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: 3, species: "Dolphin", id: 5, status: "open", health: "Excellent" }
     ];
 
-    rawAnimals.forEach(a => zoo.addAnimal(a));
+    (async () => {
+        rawAnimals.forEach(a => zoo.addAnimal(a));
+
+        const fetchedAnimals = await API.fetchAnimals();
+        fetchedAnimals.forEach(a => zoo.addAnimal(a));
+
+        renderZoo();
+    })();
 
 
     const container = document.getElementById('zoo-container');
@@ -143,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         zoo.animals.forEach((animal, index) => {
             try {
-                // Part 3: Object Destructuring
+                
                 const { name, species, availability, status: health } = animal;
 
                 const card = document.createElement('div');
@@ -196,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!animalSelect) return;
         animalSelect.textContent = "";
 
-        // Part 3: Advanced Array Method
+        
         const openAnimals = zoo.animals.filter(a => a.availability === 'open');
         
         openAnimals.forEach(animal => {
@@ -224,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     cancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
 
-    // Secure Form Handling
+    
     if (membershipForm) {
         membershipForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -252,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const selectedAnimal = animalSelect.value;
             
-            // Part 3: Array Method
+            
             const exists = zoo.animals.some(a => a.name === selectedAnimal);
 
             if (exists) {
@@ -274,5 +386,42 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('visitor-count').textContent = zoo.visitorCount;
     });
 
+
+    // PART 4 Testing
+    function runTests() {
+        const results = [];
+
+        // Successful fetch test
+        results.push({
+            test: "Fetch Animals",
+            result: API.loading === false ? "PASS" : "FAIL"
+        });
+
+        // Protocol test
+        results.push({
+            test: "HTTPS Check",
+            result: window.location.protocol === "https:" ? "PASS" : "FAIL"
+        });
+
+        // Origin whitelist test
+        results.push({
+            test: "Origin Allowed",
+            result: Security.validateOrigin() ? "PASS" : "FAIL"
+        });
+
+        // CSRF test
+        results.push({
+            test: "CSRF Token Exists",
+            result: Security.verifyToken() ? "PASS" : "FAIL"
+        });
+
+        console.table(results);
+
+        if (window.securityLogs) {
+            console.table(window.securityLogs);
+        }
+    }
+
+    runTests();
     renderZoo();
 });
