@@ -1,6 +1,0 @@
-[
-    { "name": "Zara", "species": "Zebra", "id": 10, "status": "open", "health": "Good" },
-    { "name": "Milo", "species": "Monkey", "id": 11, "status": "closed", "health": "Healthy" },
-    { "id": 1, "name": "Leo", "species": "Lion", "status": "open", "health": "Good" },
-    { "id": 2, "name": "Ella", "species": "Elephant", "status": "open", "health": "Excellent" }
-]
