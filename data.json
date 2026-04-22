@@ -1,0 +1,5 @@
+[
+  { "id": 1, "species": "Lion", "name": "Simba", "age": 5 },
+  { "id": 2, "species": "Lepard", "name": "Ellie", "age": 12 },
+  { "id": 3, "species": "Giraffe", "name": "Geoffrey", "age": 7 }
+]
