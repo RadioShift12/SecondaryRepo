@@ -1,78 +1,139 @@
-// Part 2 Step 2
-const stringifyData = (obj) => {
-    try {
-        return JSON.stringify(obj);
-    } catch (error) {
-        console.error("Stringify failed:", error.message);
-    }
+/*
+PART 2: Geolocation API Implementation
+*/
+const geoOptions = {
+    enableHighAccuracy: true,
+    timeout: 5000,
+    maximumAge: 0
 };
 
-// Part 2 Step 3
-const parseData = (jsonStr) => {
-    try {
-        return JSON.parse(jsonStr);
-    } catch (error) {
-        console.error("Parsing failed:", error.message);
-        return null;
-    }
-};
-
-// Part 3
-const validateAnimalData = (data) => {
-    const requiredFields = ['id', 'species', 'name', 'age'];
+function trackLocation() {
+    const statusDisplay = document.getElementById('status');
     
-    if (!Array.isArray(data)) throw new Error("Invalid Format: Data must be an array.");
+    if (!navigator.geolocation) {
+        return handleGeoError({ code: 0, message: "Geolocation not supported" });
+    }
 
-    data.forEach((animal, index) => {
-        // Check for required fields
-        requiredFields.forEach(field => {
-            if (!(field in animal)) {
-                throw new Error(`Missing Field: "${field}" at index ${index}`);
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const { latitude, longitude } = position.coords;
+            // Sanitize coordinates to prevent injection/formatting issues
+            statusDisplay.textContent = `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            console.log("Location successfully retrieved.");
+        },
+        handleGeoError,
+        geoOptions
+    );
+}
+
+function handleGeoError(error) {
+    const errorMap = {
+        0: "Unknown error occurred.",
+        1: "Permission denied by user.",
+        2: "Position unavailable.",
+        3: "Request timed out."
+    };
+    const msg = errorMap[error.code] || error.message;
+    document.getElementById('status').textContent = `Geo Error: ${msg}`;
+    console.error(`Geo Error (${error.code}): ${msg}`);
+}
+
+/*
+PART 3: Storage APIs (Local Storage)
+*/
+const ZOO_STORAGE_KEY = 'zoo_animals';
+
+const ZooStorage = {
+    // Create or Update an animal record
+    saveAnimal(animalObj) {
+        try {
+            const animals = this.getAllAnimals();
+            const index = animals.findIndex(a => a.id === animalObj.id);
+            
+            if (index !== -1) {
+                animals[index] = animalObj;
+                console.log(`Updated animal: ${animalObj.name}`);
+            } else {
+                animals.push(animalObj);
+                console.log(`Added new animal: ${animalObj.name}`);
             }
-        });
+            
+            localStorage.setItem(ZOO_STORAGE_KEY, JSON.stringify(animals));
+        } catch (e) {
+            this.handleStorageError(e);
+        }
+    },
 
-        // Validate Data Types
-        if (typeof animal.id !== 'number') throw new Error(`Type Error: ID must be a number at index ${index}`);
-        if (typeof animal.age !== 'number') throw new Error(`Type Error: Age must be a number at index ${index}`);
-        if (typeof animal.name !== 'string') throw new Error(`Type Error: Name must be a string at index ${index}`);
-    });
+    // Retrieve all records
+    getAllAnimals() {
+        try {
+            const data = localStorage.getItem(ZOO_STORAGE_KEY);
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            console.error("Failed to parse storage data:", e);
+            return [];
+        }
+    },
 
+    handleStorageError(e) {
+        if (e.name === 'QuotaExceededError') {
+            const statusDisplay = document.getElementById('errors');
+            statusDisplay.textContent = "Storage full! Please clear some animal records.";
+        }
+        console.error("Storage Error Detail:", e.message);
+    }
+};
+
+/*
+PART 3: Session Storage & Rate Limiting
+*/
+function checkRateLimit() {
+    const now = Date.now();
+    const lastCall = sessionStorage.getItem('last_api_call');
+    
+    // Session-based rate limiting (1 request every 5 seconds)
+    if (lastCall && (now - lastCall < 5000)) {
+        console.warn("Rate limit exceeded. Slow down, zookeeper!");
+        return false;
+    }
+    
+    sessionStorage.setItem('last_api_call', now);
     return true;
-};
+}
 
+/*
+PART 4: Testing, Debugging, and Initialization
+*/
+async function initApp() {
+    // 1. Monitor Offline Status
+    window.addEventListener('online', () => console.log("Network restored."));
+    window.addEventListener('offline', () => console.warn("Network lost. Working in offline mode."));
 
-
-const runTests = () => {
-    console.group("JSON Processing Tests");
-
-    // Test 1: Valid Data
-    const validJSON = '[{"id": 4, "species": "Tiger", "name": "Khan", "age": 3}]';
-    console.log("Test 1 (Valid):", validateAnimalData(JSON.parse(validJSON)));
-
-    // Test 2: Missing Field
-    try {
-        const missingField = '[{"id": 5, "name": "NoSpecies", "age": 2}]';
-        validateAnimalData(JSON.parse(missingField));
-    } catch (e) {
-        console.warn("Test 2 (Missing Field) Caught:", e.message);
+    // 2. Load Initial Data if LocalStorage is empty
+    if (ZooStorage.getAllAnimals().length === 0) {
+        try {
+            const response = await fetch('data.json');
+            const initialData = await response.json();
+            initialData.forEach(animal => ZooStorage.saveAnimal(animal));
+            console.log("Initial zoo data loaded from data.json");
+        } catch (err) {
+            console.error("Could not load initial data.json:", err);
+        }
     }
 
-    // Part 2 Step 2
-    const badJSON = '{ "id": 1, "name": "Broken" '; // Missing closing brace
-    console.log("Test 3 (Bad Format):", parseData(badJSON)); 
-
-    // Test 4: Incorrect Data Type
-    try {
-        const badType = '[{"id": "six", "species": "Wolf", "name": "Akela", "age": 4}]';
-        validateAnimalData(JSON.parse(badType));
-    } catch (e) {
-        console.warn("Test 4 (Bad Type) Caught:", e.message);
+    // 3. Start Location Tracking
+    if (checkRateLimit()) {
+        trackLocation();
     }
 
-    // Part 2 Step 2
-    console.log(stringifyData({ id: 1, name: "John", age: 30 }));
+    // 4. Test an "Update" scenario
+    const animals = ZooStorage.getAllAnimals();
+    if (animals.length > 0) {
+        const firstAnimal = animals[0];
+        firstAnimal.age += 1;
+        ZooStorage.saveAnimal(firstAnimal);
+    }
+}
 
-    console.groupEnd();
-};
-
-runTests();
+// Start the application
+initApp();
