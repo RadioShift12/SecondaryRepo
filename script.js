@@ -7,7 +7,7 @@ const updateAppState = (newState) => {
 const registerServiceWorker = async () => {
   try {
     if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.register('/PWA_Foundations/service-worker.js');
+      const registration = await navigator.serviceWorker.register('/service-worker.js');
       console.log('Service Worker registered:', registration);
     }
   } catch (error) {
